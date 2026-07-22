@@ -1,114 +1,217 @@
-# Storage Unit CV — MVP (Part A) Implementation Plan
+# Storage Unit CV — Part A MVP: Implementation Spec
 
-## Context
+Refined from the outline plan via Ultraplan. Master plan: `docs/source-plan.md`
+(Part A = this MVP, due Thursday evening 2026-07-23; Part B = post-MVP roadmap,
+**strictly out of scope here** — see final section).
 
-Building the MVP from `storage_unit_cv_plan (1).md` (in Downloads): a CV system
-that watches a storage unit via a **continuous webcam connection**, samples a
-frame every N seconds, runs **pretrained YOLO** (stock COCO classes, CPU-only),
-and emits **add/remove events from per-class count diffs** between consecutive
-snapshots. Due **Thursday evening (2026-07-23)** together with a **flow
-diagram** and a **PowerPoint deck** for the user's manager.
+**Working mode (updated):** Claude delivers skeleton files with step-by-step
+pseudocode for the CV parts (`watcher.py`, `tests/test_events.py`); the user
+implements them hands-on, returning to the session only when stuck.
+`deck/build_deck.py` and `README.md` are Claude-written working code/docs
+(presentation boilerplate, no CV learning value). This doc is the reference
+manual for the hand-implementation.
 
-Part B (custom training, motion triggering, robustness, tracking) is explicitly
-out of scope. Working mode for Part A: write working code directly; after each
-piece works, explain what it does, why this approach, and the key parameters.
+---
 
-User decisions from brainstorming:
-- **Video source:** built-in/USB webcam (`cv2.VideoCapture(0)`)
-- **Deck:** PowerPoint `.pptx`, generated with `python-pptx`
-- **Diagram:** build fresh; drawn as **native pptx shapes** (editable in
-  PowerPoint, no mermaid-cli/Node dependency) + Mermaid source kept in docs
-- Repo `C:\Users\vmisa\Desktop\CV_Tracking\MV-CV` is empty (git init done, no commits)
+## 1. Environment & setup
 
-## Environment (settled)
-
-- **Python 3.12** venv: `py -3.12 -m venv .venv` (3.14 is the default install
-  but torch/ultralytics wheel support is safest on 3.12; both are present)
-- Deps: `ultralytics` (pulls CPU torch + torchvision on Windows PyPI),
-  `opencv-python`, `python-pptx`; dev: `pytest`
-- Model: **YOLO11n** (`yolo11n.pt`, auto-downloads ~5.4 MB on first run).
-  CPU inference ~100–300 ms per 640 px frame — trivial at 5 s intervals.
-
-## Repo layout
+Already done in this repo, recorded for reproducibility:
 
 ```
-MV-CV/
-  .gitignore              # .venv, logs/, *.pt, __pycache__
-  requirements.txt
-  README.md               # setup + run instructions, Mermaid flow diagram
-  watcher.py              # the MVP script (single file, deliberate)
-  tests/test_events.py    # unit tests for the count-diff logic only
-  deck/build_deck.py      # generates presentation.pptx
-  deck/presentation.pptx  # generated output (committed)
-  docs/mvp-plan.md        # copy of this approved plan, for the repo record
-  logs/                   # runtime output (gitignored): events.csv, snapshots/
+py -3.12 -m venv .venv          # Python 3.12 — safest torch/ultralytics wheels
+.venv\Scripts\activate          # (PowerShell: .venv\Scripts\Activate.ps1)
+pip install -r requirements.txt
 ```
 
-Single-file `watcher.py` (not a package): fastest to build, and easiest to walk
-through function-by-function in the presentation. Functions keep boundaries
-clean: `parse_args`, `sample_frames` (capture), `detect_counts` (YOLO),
-`diff_counts` (events), `log_event` / `save_snapshot` (output), `main` loop.
+`requirements.txt` (exact contents):
 
-## watcher.py behavior
+```
+ultralytics
+opencv-python
+python-pptx
+pytest
+```
 
-1. **Capture** — open webcam once and keep the connection; `read()` frames
-   continuously in a loop (cheap on CPU, keeps the buffer fresh so samples are
-   current), but only hand a frame to detection when `--interval` seconds
-   (default 5) have elapsed. This matches the plan's "continuous video
-   connection, detection on sampled frames" requirement.
-2. **Detect** — `model(frame, conf=0.5, imgsz=640, verbose=False)`; aggregate
-   to a `Counter` of class-name → count. `--conf` and `--model` are CLI flags.
-3. **Events** — first snapshot logs a BASELINE (no events). Then per class:
-   count up → `ADDED xN`, count down → `REMOVED xN`. Pure function, unit-tested.
-4. **Output** — every sample: console line with current counts. Every event:
-   console line + append to `logs/events.csv`
-   (`timestamp,event,class,delta,prev_count,new_count`) + save the annotated
-   frame (boxes drawn) to `logs/snapshots/` — these become the deck screenshots.
-5. Clean Ctrl+C shutdown; `--show` flag for a live preview window (handy while
-   staging the demo, off by default).
+Notes:
+- First `YOLO("yolo11n.pt")` call auto-downloads the model (~5.4 MB).
+- The torch dependency (~200 MB) is the install long pole — already installed.
+- Code, tests, and deck generation are OS-independent. Only the **webcam smoke
+  test and staged demo run require the Windows machine with the camera**.
 
-Known limitations to state honestly (in deck, README): COCO has **no "box"
-class** — nearest stand-ins are suitcase/handbag/backpack; good demo objects
-that COCO detects well: bottle, cup, book, backpack, laptop, teddy bear,
-scissors, vase. Count-diff can't see equal-count swaps; a single flickered
-detection produces a false event (hysteresis is Part B); lighting untested.
+## 2. `watcher.py` — contract
 
-## Flow diagram (content)
+Single file, deliberate: fastest to build and easiest to walk through
+function-by-function in the presentation.
 
-Webcam (continuous) → frame buffer → [every N s] sample frame → YOLO11n (CPU,
-stock COCO) → per-class counts → diff vs previous counts → no change → wait /
-change → ADDED/REMOVED events → console + events.csv + annotated snapshot.
-Drawn as native shapes on a deck slide; same diagram as Mermaid in README.
+### CLI (argparse)
 
-## Deck outline (build_deck.py)
+| Flag         | Type / default      | Meaning                                   |
+|--------------|---------------------|-------------------------------------------|
+| `--interval` | float, `5.0`        | Seconds between detection samples          |
+| `--conf`     | float, `0.5`        | YOLO confidence threshold                  |
+| `--model`    | str, `yolo11n.pt`   | Ultralytics model weights                  |
+| `--camera`   | int, `0`            | OpenCV camera index                        |
+| `--imgsz`    | int, `640`          | Inference image size                       |
+| `--logdir`   | str, `logs`         | Output dir (`events.csv`, `snapshots/`)    |
+| `--show`     | flag, off           | Live annotated preview window              |
 
-1. Title — Storage Unit Item Detection: MVP
-2. The problem — watch unit, know what's there, detect add/remove
-3. MVP architecture — the flow diagram (native shapes)
-4. Key design choices — CPU-only → sampled frames not full-rate video; stock
-   YOLO stand-in classes (explicitly named); count-diff not tracking
-5. Demo — annotated snapshots + events.csv excerpt from a real staged run
-   (script tolerates missing screenshots with placeholders so the deck always builds)
-6. Known limitations — stand-in classes, flicker false-events, lighting untested, swaps invisible
-7. Roadmap — Part B phases 1–6, one line each
-8. Next steps / ask
+### Functions
 
-## Build order (Thursday)
+```
+Event  — frozen dataclass: class_name: str, prev: int, new: int
+         properties: delta = new - prev; kind = "ADDED" if delta > 0 else "REMOVED"
 
-1. Scaffold: `.gitignore`, `requirements.txt`, venv, install deps (torch is a
-   ~200 MB download — kick off first), copy this plan to `docs/mvp-plan.md`, first commit
-2. `watcher.py` + `tests/test_events.py` (diff logic test-first; it's a pure function)
-3. Live smoke test with webcam; adjust `--conf` if detections flicker
-4. Staged demo run: add/remove 2–3 known-good objects; collect events.csv + snapshots
-5. `deck/build_deck.py` → presentation.pptx with real screenshots
-6. README (setup, usage, Mermaid diagram, limitations)
-7. Explanations after each working piece (per Part A working mode); commit at each milestone
+parse_args() -> argparse.Namespace
+detect_counts(model, frame, conf: float, imgsz: int) -> tuple[Counter, ndarray]
+    # run YOLO ONCE on one frame → ({class_name: count}, annotated frame)
+    # one inference produces both outputs — never run the model twice per sample
+diff_counts(prev: Counter, curr: Counter) -> list[Event]
+    # PURE function — the unit-tested core. No I/O, no globals.
+log_event(csv_path, timestamp, event_kind, class_name, delta, prev, new) -> None
+save_snapshot(dir, annotated_frame, timestamp, reason) -> Path
+main() -> int
+```
 
-## Verification
+### Capture loop semantics
 
-- `pytest` green on the diff-logic tests
-- Live run: stage bottle/cup/backpack add+remove → console shows BASELINE then
-  ADDED/REMOVED lines; `logs/events.csv` rows match; annotated snapshots saved
-- `python deck/build_deck.py` produces `presentation.pptx` that opens in
-  PowerPoint with diagram + real screenshots
-- README steps reproduce from a clean clone (venv → install → run)
+Open the camera **once** and keep the connection (the source plan requires a
+continuous video connection). `read()` every frame in a tight loop — cheap on
+CPU and keeps the driver buffer fresh so samples are current — but hand a frame
+to `detect_counts` only when `--interval` seconds have elapsed since the last
+sample. No motion triggering (Part B).
+
+### Event semantics
+
+- First snapshot is the **BASELINE**: logged, but `diff_counts` is *not*
+  called — baseline handling lives in `main()`, keeping `diff_counts` pure.
+- From then on, each sample diffs against the previous sample's counts.
+- Missing keys count as 0 — so a class appearing or vanishing entirely falls
+  out of the same delta logic, no special case.
+- Classes with delta 0 produce no Event. Iterate the union of class names in
+  **sorted order** for deterministic output.
+- One Event per class per sample (magnitude carried by `delta`, e.g. two
+  bottles removed → one Event with delta −2).
+- Known blind spot (accepted for MVP): equal-count swaps are invisible.
+
+### `logs/events.csv` schema
+
+Header written once when the file is created:
+
+```
+timestamp,event,class,delta,prev_count,new_count
+```
+
+- `timestamp`: ISO-8601 local, e.g. `2026-07-23T14:05:10`
+- `event`: `BASELINE` | `ADDED` | `REMOVED`
+- `delta`: signed int; arithmetic always holds: `delta = new_count - prev_count`
+- BASELINE convention: one row **per class present** in the first snapshot,
+  with `prev_count=0`, `new_count=count`, `delta=count`, `event=BASELINE`.
+  Nothing detected at baseline → header only, no rows.
+
+### Snapshots
+
+Annotated frames (YOLO's plotted boxes) saved to `logs/snapshots/` as
+`YYYYMMDD-HHMMSS_<reason>.jpg`, where reason is `baseline` or `event`.
+Saved on the baseline sample and on every sample that produced ≥1 Event.
+These become the deck's demo screenshots.
+
+### Failure handling
+
+- Camera fails to open → print clear error naming the index, exit code 1.
+- Transient `read()` failure → warn, skip that iteration, keep looping;
+  **30 consecutive** failures → give up with an error (camera unplugged).
+- Ctrl+C → clean shutdown in `finally`: release capture, destroy any windows,
+  exit 0.
+
+## 3. Test plan — `tests/test_events.py`
+
+Target: `diff_counts` (+ `Event`). Pure function — no camera, no model needed.
+Cases (worked example first; the rest are skeleton TODOs):
+
+| # | Case                              | prev → curr                          | Expect                                        |
+|---|-----------------------------------|--------------------------------------|-----------------------------------------------|
+| 1 | single add (worked example)       | `{bottle:1}` → `{bottle:2}`          | 1 Event: bottle, delta +1, ADDED              |
+| 2 | no change                         | `{cup:1}` → `{cup:1}`                | `[]`                                          |
+| 3 | single remove                     | `{cup:2}` → `{cup:1}`                | 1 Event: cup, delta −1, REMOVED               |
+| 4 | delta > 1                         | `{bottle:0}` → `{bottle:3}`          | 1 Event: bottle, delta +3                     |
+| 5 | simultaneous add+remove, 2 classes| `{cup:1,book:1}` → `{cup:2,book:0}`  | 2 Events: book −1, cup +1 (sorted order)      |
+| 6 | class newly appears               | `{}` → `{backpack:1}`                | 1 Event: backpack +1 (missing key = 0)        |
+| 7 | class fully disappears            | `{backpack:1}` → `{}`                | 1 Event: backpack −1                          |
+| 8 | empty ↔ empty                     | `{}` → `{}`                          | `[]`                                          |
+
+Baseline is the caller's job, so there is no baseline test on `diff_counts`
+itself — the convention is asserted implicitly by case 6/7 semantics.
+
+## 4. Flow diagram
+
+```mermaid
+flowchart LR
+    CAM[Webcam - continuous connection] --> BUF[Frame loop - read every frame]
+    BUF -->|every N s| SAMPLE[Sampled frame]
+    SAMPLE --> YOLO[YOLO11n CPU - stock COCO classes]
+    YOLO --> COUNTS[Per-class counts]
+    COUNTS --> DIFF{Diff vs previous counts}
+    DIFF -->|no change| BUF
+    DIFF -->|change| EVENTS[ADDED / REMOVED events]
+    EVENTS --> OUT[Console + events.csv + annotated snapshot]
+    OUT --> BUF
+```
+
+Same diagram appears in `README.md` and, as native editable shapes, on deck
+slide 3.
+
+## 5. Deck spec — `deck/build_deck.py` → `deck/presentation.pptx`
+
+Eight slides:
+
+1. **Title** — Storage Unit Item Detection: MVP; date; author.
+2. **Problem** — watch a storage unit; know what's in view; detect add/remove.
+3. **Architecture** — the flow diagram drawn as native pptx shapes (rounded
+   rectangles + connectors — editable in PowerPoint, no image import).
+4. **Key design choices** — CPU-only → sampled frames, not full-rate video;
+   stock YOLO stand-in classes (named explicitly); count-diff, not tracking.
+5. **Demo** — newest images from `logs/snapshots/` + tail of `logs/events.csv`;
+   if logs are absent, placeholder boxes so the deck always builds. Regenerate
+   after the staged run to pull in real screenshots.
+6. **Known limitations** — stand-in classes (COCO has no "box"), flicker false
+   events, equal-count swaps invisible, lighting untested.
+7. **Roadmap (Part B)** — six one-liners, straight from `docs/source-plan.md`.
+8. **Next steps / ask** — what's needed to go from MVP to reliable system.
+
+## 6. Build order (annotated)
+
+| Step | What | Who | Env | Est. |
+|------|------|-----|-----|------|
+| 1 | Scaffold, venv, deps, plan docs committed | done | any | — |
+| 2 | Skeletons (`watcher.py`, tests) + deck generator + README, committed | Claude | any | — |
+| 3 | Implement `Event` + `diff_counts`; example test green; write remaining tests from pseudocode | user | any | ~1–2 h |
+| 4 | Implement capture/detect/log path in `watcher.py` | user | any (imports run anywhere) | ~2–3 h |
+| 5 | Webcam smoke test (`--show`); adjust `--conf` if detections flicker | user | **Windows + webcam** | ~30 min |
+| 6 | Staged demo: add/remove 2–3 objects; collect events.csv + snapshots | user | **Windows + webcam** | ~30 min |
+| 7 | `python deck/build_deck.py` to pull real screenshots; final commit | user | any | ~10 min |
+
+Good demo objects (reliably detected COCO classes): bottle, cup, book,
+backpack, laptop, teddy bear, scissors, vase.
+
+## 7. Known limitations (state honestly in the deck)
+
+- COCO has **no "box" class** — nearest stand-ins: suitcase, handbag, backpack.
+- A single flickered detection produces a false ADDED/REMOVED pair
+  (hysteresis/thresholding is Part B).
+- Equal-count swaps between snapshots are invisible to count-diff.
+- Lighting sensitivity untested (Part B stress tests).
+
+## 8. Out of scope (Part B)
+
+Per `docs/source-plan.md`: motion-triggered capture, custom-trained models,
+tracking across frames, hysteresis tuning, robustness/lighting testing,
+annotation workflows. None of it is built, configured, or scaffolded in Part A.
+
+## 9. Verification
+
+| Command | Expected |
+|---------|----------|
+| `pytest` | Before implementation: 1 red (worked example), 7 skipped. After step 3: all 8 green. |
+| `python -c "import watcher"` | Imports cleanly, even as skeleton. |
+| `python watcher.py --show` | Preview window; console BASELINE line, then counts each sample; ADDED/REMOVED lines on change; rows in `logs/events.csv`; snapshots in `logs/snapshots/`. Ctrl+C exits cleanly. |
+| `python deck/build_deck.py` | `deck/presentation.pptx` opens in PowerPoint; placeholders before the staged run, real screenshots after. |
