@@ -60,8 +60,7 @@ every sample that produced an event.
 
 - Stock COCO classes only — there is **no "box" class**; suitcase/backpack/
   handbag act as stand-ins until Part B custom training.
-- A flickered detection produces a false ADDED/REMOVED pair (hysteresis is
-  Part B). Equal-count swaps between samples are invisible. Lighting
+- A flickered detection produces a false ADDED/REMOVED pair. Equal-count swaps between samples are invisible. Lighting
   sensitivity untested.
 
 ## Layout
