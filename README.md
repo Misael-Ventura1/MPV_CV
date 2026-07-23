@@ -5,12 +5,6 @@ pretrained YOLO (stock COCO classes, CPU-only), and logs an event whenever an
 item is **added** or **removed** — determined by per-class count diffs between
 frames sampled every few seconds from the continuous video connection.
 
-> **Repo state:** `watcher.py` and `tests/test_events.py` are skeletons with
-> step-by-step pseudocode, being implemented by hand as a learning exercise.
-> The reference contract lives in [`docs/mvp-plan.md`](docs/mvp-plan.md);
-> the master plan (incl. the Part B roadmap) in
-> [`docs/source-plan.md`](docs/source-plan.md).
-
 ## Setup
 
 ```
@@ -28,13 +22,10 @@ part of the install.
 python watcher.py                  # defaults: camera 0, sample every 5 s
 python watcher.py --show           # + live preview and detection windows
 python watcher.py --interval 10 --conf 0.4
-pytest                             # unit tests for the count-diff core
-python deck/build_deck.py          # regenerate the presentation deck
 ```
 
 Flags: `--interval` (s between samples), `--conf` (YOLO confidence),
-`--model`, `--camera`, `--imgsz`, `--logdir`, `--show` — details in
-`docs/mvp-plan.md` §2.
+`--model`, `--camera`, `--imgsz`, `--logdir`, `--show`.
 
 ## How it flows
 
@@ -76,9 +67,5 @@ every sample that produced an event.
 ## Layout
 
 ```
-watcher.py            capture → detect → diff → log (single file, skeleton)
-tests/test_events.py  count-diff unit tests (1 worked example + 7 TODOs)
-deck/build_deck.py    generates deck/presentation.pptx (placeholders until a demo run)
-docs/mvp-plan.md      implementation spec — the reference while filling in skeletons
-docs/source-plan.md   master plan: Part A (this MVP) + Part B (roadmap)
+watcher.py            capture → detect → diff → log (single file)
 ```
