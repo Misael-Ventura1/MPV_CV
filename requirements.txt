@@ -2,3 +2,4 @@ ultralytics
 opencv-python
 python-pptx
 pytest
+pyyaml
