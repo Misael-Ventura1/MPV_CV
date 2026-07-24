@@ -2,7 +2,7 @@
 interval: 5.0        
 conf: 0.5             
 model: yolo11n.pt
-camera: 0
+camera: 0 
 imgsz: 640
 logdir: logs
 show: true

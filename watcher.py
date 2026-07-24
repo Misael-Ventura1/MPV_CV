@@ -17,7 +17,7 @@ from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
 
-import cv2 
+import cv2
 import yaml
 
 
