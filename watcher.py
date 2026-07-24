@@ -66,7 +66,7 @@ def parse_args():
 
 
 def detect_objects(model, frame, conf: float, imgsz: int):
-
+    """Return the count and labels for each item"""
     results = model(frame, conf=conf, imgsz=imgsz, verbose=False)
     r = results[0]
     counts = Counter()
@@ -154,7 +154,7 @@ def main():
             if time.monotonic() - last_sample < args.interval:
                 continue
             last_sample = time.monotonic()
-
+            
             counts, annotated = detect_objects(model, frame, args.conf, args.imgsz)
             now = datetime.now()
             record_sample(prev_counts, counts, csv_path, snap_dir, annotated,
