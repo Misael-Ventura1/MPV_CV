@@ -6,3 +6,4 @@ camera: 0
 imgsz: 640
 logdir: logs
 show: true
+ 

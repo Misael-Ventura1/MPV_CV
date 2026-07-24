@@ -1,11 +1,3 @@
-"""Storage-unit item watcher — MVP skeleton.
-
-Continuous webcam connection; every --interval seconds one frame is sampled
-and run through pretrained YOLO (stock COCO classes, CPU). Per-class count
-diffs between consecutive samples become ADDED/REMOVED events, logged to
-console + logs/events.csv, with annotated snapshots saved on change.
-"""
-
 from __future__ import annotations
 from ultralytics import YOLO
 import argparse
@@ -13,30 +5,13 @@ import csv
 import sys
 import time
 from collections import Counter
-from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
 
 import cv2
 import yaml
 
-
-@dataclass(frozen=True)
-class Event:
-    class_name: str
-    prev: int
-    new: int
-
-    @property
-    def delta(self):
-        return self.new - self.prev
-
-    @property
-    def kind(self):
-        return "ADDED" if self.delta > 0 else "REMOVED"
-
-def load_config(path: Path):
-    
+def load_config(path):
     if not path.exists():
         return {}
     with open(path) as f:
@@ -44,15 +19,11 @@ def load_config(path: Path):
 
 
 def parse_args():
-
     config_p = argparse.ArgumentParser(add_help=False)
-    config_p.add_argument("--config", default="base.yaml", help="YAML file of default flag values")
+    config_p.add_argument("--config", default="base.yaml")
     config_args, _ = config_p.parse_known_args()
 
-    p = argparse.ArgumentParser(
-        description="Base.yaml provides all the Flags for the program. User can override.",
-        parents=[config_p],
-    )
+    p = argparse.ArgumentParser(parents=[config_p])
     p.add_argument("--interval", type=float, default=5.0)
     p.add_argument("--conf", type=float, default=0.5)
     p.add_argument("--model", default="yolo11n.pt")
@@ -64,32 +35,32 @@ def parse_args():
     return p.parse_args()
 
 
-
-def detect_objects(model, frame, conf: float, imgsz: int):
-    """Return the count and labels for each item"""
+def detect_objects(model, frame, conf, imgsz):
     results = model(frame, conf=conf, imgsz=imgsz, verbose=False)
     r = results[0]
     counts = Counter()
-    for box in r.boxes:            
-        cls_id = int(box.cls)      
-        name = r.names[cls_id]     
+    for box in r.boxes:
+        cls_id = int(box.cls)
+        name = r.names[cls_id]
         counts[name] += 1
-    annotated = r.plot()       
+    annotated = r.plot()
     return counts, annotated
 
 
-def diff_counts(prev: Counter, curr: Counter):
+def diff_counts(prev, curr):
     names = sorted(set(prev) | set(curr))
     events = []
     for name in names:
         p = prev.get(name, 0)
         c = curr.get(name, 0)
-        if c != p:
-            events.append(Event(name, p, c))
+        if c == p:
+            continue
+        kind = "ADDED" if c > p else "REMOVED"
+        events.append((name, p, c, c - p, kind))
     return events
 
 
-def log_event(csv_path: Path, timestamp: str, event_kind: str, class_name: str, delta: int, prev: int, new: int):
+def log_event(csv_path, timestamp, event_kind, class_name, delta, prev, new):
     csv_path.parent.mkdir(parents=True, exist_ok=True)
     is_new = not csv_path.exists()
     with open(csv_path, mode='a', newline="") as f:
@@ -99,31 +70,31 @@ def log_event(csv_path: Path, timestamp: str, event_kind: str, class_name: str, 
         w.writerow([timestamp, event_kind, class_name, delta, prev, new])
 
 
-def save_snapshot(snap_dir: Path, annotated_frame, timestamp_compact: str, reason: str):
-    snap_dir.mkdir(parents=True, exist_ok=True)
-    path = snap_dir / f"{timestamp_compact}_{reason}.jpg"
-    cv2.imwrite(str(path), annotated_frame)
-    return path
-
-
-def show_frame(window: str, frame) -> bool:
+def show_frame(window, frame):
     cv2.imshow(window, frame)
     return cv2.waitKey(1) & 0xFF == ord('q')
 
 
-def record_sample(prev_counts: Counter | None, counts: Counter, csv_path: Path, snap_dir: Path, annotated, ts: str, ts_compact: str):
+def record_sample(prev_counts, counts, csv_path, snap_dir, annotated, ts, ts_compact):
+    snap_dir.mkdir(parents=True, exist_ok=True)
+
     if prev_counts is None:
         for name in sorted(counts):
             log_event(csv_path, ts, "BASELINE", name, counts[name], 0, counts[name])
-        save_snapshot(snap_dir, annotated, ts_compact, "baseline")
+        snap_path = snap_dir / f"{ts_compact}_baseline.jpg"
+        cv2.imwrite(str(snap_path), annotated)
         print(f"BASELINE {dict(counts)}")
-    else:
-        events = diff_counts(prev_counts, counts)
-        for event in events:
-            log_event(csv_path, ts, event.kind, event.class_name, event.delta, event.prev, event.new)
-            print(f"{event.kind} {event.class_name} ({event.delta:+d})")
-        if events:
-            save_snapshot(snap_dir, annotated, ts_compact, "event")
+        return
+
+    events = diff_counts(prev_counts, counts)
+    for name, p, c, delta, kind in events:
+        log_event(csv_path, ts, kind, name, delta, p, c)
+        print(f"{kind} {name} ({delta:+d})")
+
+    if events:
+        snap_path = snap_dir / f"{ts_compact}_event.jpg"
+        cv2.imwrite(str(snap_path), annotated)
+        # print("DEBUG", dict(counts))
 
 
 def main():
@@ -150,11 +121,11 @@ def main():
 
             if args.show and show_frame("live", frame):
                 break
-    
+
             if time.monotonic() - last_sample < args.interval:
                 continue
             last_sample = time.monotonic()
-            
+
             counts, annotated = detect_objects(model, frame, args.conf, args.imgsz)
             now = datetime.now()
             record_sample(prev_counts, counts, csv_path, snap_dir, annotated,
