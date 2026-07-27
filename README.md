@@ -22,6 +22,7 @@ A minimum working product is in this repository, built on my Tartanhacks 2025 pr
 
 ## How it Works
 ![Flowchart](./FlowChart.png)
+click on image for a better view
 
 ## Steps for using on your own machine
 1. Create a Folder where you would like to place this project. If you have VsCode use it to make this easier if not you can do everything in a terminal.
