@@ -8,6 +8,18 @@ This is a minimum viable product to showcase the potential of using a Computer v
 
 As the startup grows, tracking all items in storage will become increasingly difficult. This project will replace slow manual checks with cameras that automatically detect inventory changes, improving accuracy, reducing labor costs, and providing real-time visibility into stock levels.
 
+## Business Case
+### Problem
+- **Labor**: Inventory only keeps growing, and things are constantly moving.
+- **Accuracy**: A count is only accurate the moment it's taken. Purchasing decisions get made from numbers that are already days old.
+- **Errors**: Manual counts miss things. That cost doesn't show up right away, it shows up later as emergencies.
+
+None of these problems get better as the company grows. They get worse in proportion with SKU.
+
+
+## What exists
+A minimum working product is in this repository, built on my Tartanhacks 2025 project. 
+
 ## How it Works
 ![Flowchart](./FlowChart.png)
 
