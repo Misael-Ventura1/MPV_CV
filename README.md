@@ -50,11 +50,6 @@ python watcher.py
 8. To exit program press q in one of the two windows.
 
 Commands may vary depending on which OS you are using.
-``` 
- cd folder_name
- git clone https://github.com/Misael-Ventura1/MPV_CV.git
- cd MVP_CV
-```
 
 ## Features
 
