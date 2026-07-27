@@ -26,6 +26,7 @@ git clone https://github.com/Misael-Ventura1/MPV_CV.git
 cd MVP_CV
 ```
 5. create a virtual environment called .venv
+
 macOS/Linux
 ```
 source .venv/bin/activate
