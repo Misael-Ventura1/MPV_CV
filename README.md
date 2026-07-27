@@ -11,6 +11,50 @@ As the startup grows, tracking all items in storage will become increasingly dif
 ## How it Works
 ![Flowchart](./FlowChart.png)
 
+## Steps for using on your own machine
+1. Create a Folder where you would like to place this project. If you have VsCode use it to make this easier if not you can do everything in a terminal.
+2. Enter folder via Terminal and use the following commands
+```
+cd Name_of_created_folder
+```
+3. Pull Code from GitHub
+```
+git clone https://github.com/Misael-Ventura1/MPV_CV.git
+```
+4. Enter the new folder gerneated from pulling code Should be titled MVP_CV. After typing cd MV hit tab to autocomplete the correct path.
+```
+cd MVP_CV
+```
+5. create a virtual environment called .venv
+macOS/Linux
+```
+source .venv/bin/activate
+```
+Windows (Command Prompt)
+```
+.venv\Scripts\activate.bat
+```
+Windows (PowerShell)
+```
+.venv\Scripts\Activate.ps1
+```
+6. Download all of the requiremnts via the requirments.txt file. This may take a few minutes depending on how powerful your system is.
+```
+pip install -r requirements.txt
+```
+7. Run the program after typing python w, hit tab to autocomplete correct syntax for your system.
+```
+python watcher.py
+```
+8. To exit program press q in one of the two windows.
+
+Commands may vary depending on which OS you are using.
+``` 
+ cd folder_name
+ git clone https://github.com/Misael-Ventura1/MPV_CV.git
+ cd MVP_CV
+```
+
 ## Features
 
 - Real-time detection
